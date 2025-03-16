@@ -5,8 +5,7 @@ from lightweight_charts.widgets import StreamlitChart
 from datetime import timedelta
 import numpy as np
 import logging
-from IPython.display import display, HTML
-
+ 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
