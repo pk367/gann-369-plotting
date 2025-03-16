@@ -184,47 +184,14 @@ if st.button("Generate Chart"):
                 with col2:
                     st.subheader(f"Found {len(swing_low_dates)} Swing Lows")
                     st.dataframe(low_projection_df.head())
-                
-                # Generate vertical lines for projections
-                markers = []
-                
-                # Mark original swing points
-                for date, price in zip(swing_high_dates, swing_high_prices):
-                    markers.append({
-                        'time': date.strftime('%Y-%m-%d'),
-                        'position': 'aboveBar',
-                        'color': '#00FF00',
-                        'shape': 'circle',
-                        'text': f'H: {price}'
-                    })
-                
-                for date, price in zip(swing_low_dates, swing_low_prices):
-                    markers.append({
-                        'time': date.strftime('%Y-%m-%d'),
-                        'position': 'belowBar',
-                        'color': '#FF0000',
-                        'shape': 'circle',
-                        'text': f'L: {price}'
-                    })
-                
-                # Add projection markers if enabled
-                if show_projections:
-                    # Add projection lines for swing highs (blue)
-                    high_markers = generate_vertical_lines(high_projection_df, "Swing High", "#0000FF")
-                    markers.extend(high_markers)
-                    
-                    # Add projection lines for swing lows (red)
-                    low_markers = generate_vertical_lines(low_projection_df, "Swing Low", "#FF0000")
-                    markers.extend(low_markers)
-                
+                 
                 # Create and display the chart
                 st.subheader(f"Price Chart for {symbol} with Swing Projections")
                 chart = StreamlitChart(width=1200, height=800)
                 
                 # Set the data and markers
                 chart.set(chart_data)
-                chart.marker_set(markers)
-                
+                 
                 # Load the chart
                 chart.load()
                 
