@@ -5,7 +5,8 @@ from lightweight_charts.widgets import StreamlitChart
 from datetime import timedelta
 import numpy as np
 import logging
- 
+from IPython.display import display, HTML
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -81,8 +82,8 @@ def calculate_projected_dates(dates, prices, type_label):
     return df
 
 def generate_vertical_lines(projection_df, type_label, color):
-    """Generate vertical line markers for lightweight charts."""
-    vertical_lines = []
+    """Generate markers for projected dates."""
+    markers = []
     
     # Define the projection periods
     periods = [30, 60, 90, 120, 180, 270, 360]
@@ -105,16 +106,15 @@ def generate_vertical_lines(projection_df, type_label, color):
                 # Format the time correctly for lightweight charts
                 time_str = row[date_col].strftime('%Y-%m-%d')
                 
-                vertical_lines.append({
+                markers.append({
                     'time': time_str,
                     'color': colors[period],
                     'text': f"{type_label} +{period}d",
                     'position': 'aboveBar' if type_label == 'Swing High' else 'belowBar',
                     'shape': 'arrow' if type_label == 'Swing High' else 'arrowUp',
-                    'textColor': colors[period]
                 })
     
-    return vertical_lines
+    return markers
 
 # Input fields for stock symbol and exchange
 col1, col2, col3 = st.columns(3)
@@ -163,7 +163,7 @@ if st.button("Generate Chart"):
                 # Reset index to make date a column
                 chart_data = data.reset_index()
                 
-                # Convert datetime to string format that lightweight charts can handle
+                # Convert datetime to string format that lightweight charts expects
                 chart_data['datetime'] = chart_data['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
                 
                 # Rename columns to match what lightweight charts expects
@@ -185,45 +185,70 @@ if st.button("Generate Chart"):
                     st.subheader(f"Found {len(swing_low_dates)} Swing Lows")
                     st.dataframe(low_projection_df.head())
                 
-                # Generate vertical lines for projections
-                markers = []
-                
-                # Mark original swing points
-                for date, price in zip(swing_high_dates, swing_high_prices):
-                    markers.append({
-                        'time': date.strftime('%Y-%m-%d'),
-                        'position': 'aboveBar',
-                        'color': '#00FF00',
-                        'shape': 'circle',
-                        'text': f'H: {price}'
-                    })
-                
-                for date, price in zip(swing_low_dates, swing_low_prices):
-                    markers.append({
-                        'time': date.strftime('%Y-%m-%d'),
-                        'position': 'belowBar',
-                        'color': '#FF0000',
-                        'shape': 'circle',
-                        'text': f'L: {price}'
-                    })
-                
-                # Add projection markers if enabled
-                if show_projections:
-                    # Add projection lines for swing highs (blue)
-                    high_markers = generate_vertical_lines(high_projection_df, "Swing High", "#0000FF")
-                    markers.extend(high_markers)
-                    
-                    # Add projection lines for swing lows (red)
-                    low_markers = generate_vertical_lines(low_projection_df, "Swing Low", "#FF0000")
-                    markers.extend(low_markers)
-                
                 # Create and display the chart
                 st.subheader(f"Price Chart for {symbol} with Swing Projections")
                 chart = StreamlitChart(width=1200, height=800)
                 
-                # Set the data and markers
+                # Set the primary candlestick data
                 chart.set(chart_data)
-                chart.marker_set(markers)
+                
+                # Create markers for original swing points and projections
+                if show_projections:
+                    # Create markers for original swing highs
+                    for date, price in zip(swing_high_dates, swing_high_prices):
+                        chart.add_custom_series([{
+                            'time': date.strftime('%Y-%m-%d'),
+                            'value': price,
+                            'color': '#00FF00',
+                            'shape': 'circle',
+                            'text': f'H: {price}'
+                        }], name="Swing Highs", type="markers")
+                    
+                    # Create markers for original swing lows
+                    for date, price in zip(swing_low_dates, swing_low_prices):
+                        chart.add_custom_series([{
+                            'time': date.strftime('%Y-%m-%d'),
+                            'value': price,
+                            'color': '#FF0000',
+                            'shape': 'circle',
+                            'text': f'L: {price}'
+                        }], name="Swing Lows", type="markers")
+                    
+                    # Generate and add markers for projection dates
+                    # For swing highs (blue vertical lines)
+                    periods = [30, 60, 90, 120, 180, 270, 360]
+                    for period in periods:
+                        vertical_lines = []
+                        for _, row in high_projection_df.iterrows():
+                            date_col = f'Swing High +{period}d'
+                            price_col = f'Swing High Price'
+                            if pd.notna(row[date_col]):
+                                vertical_lines.append({
+                                    'time': row[date_col].strftime('%Y-%m-%d'),
+                                    'value': float(data['high'].max()) * 1.01,  # Slightly above the highest price
+                                    'color': '#0000FF',
+                                    'shape': 'arrowDown',
+                                    'text': f'H+{period}d'
+                                })
+                        if vertical_lines:
+                            chart.add_custom_series(vertical_lines, name=f"High+{period}d", type="markers")
+                    
+                    # For swing lows (red vertical lines)
+                    for period in periods:
+                        vertical_lines = []
+                        for _, row in low_projection_df.iterrows():
+                            date_col = f'Swing Low +{period}d'
+                            price_col = f'Swing Low Price'
+                            if pd.notna(row[date_col]):
+                                vertical_lines.append({
+                                    'time': row[date_col].strftime('%Y-%m-%d'),
+                                    'value': float(data['low'].min()) * 0.99,  # Slightly below the lowest price
+                                    'color': '#FF0000',
+                                    'shape': 'arrowUp',
+                                    'text': f'L+{period}d'
+                                })
+                        if vertical_lines:
+                            chart.add_custom_series(vertical_lines, name=f"Low+{period}d", type="markers")
                 
                 # Load the chart
                 chart.load()
