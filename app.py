@@ -26,6 +26,9 @@ interval = st.selectbox("Interval", list(interval_options.keys()))
 # Number of bars to fetch
 n_bars = st.slider("Number of bars", 100, 1000, 300)
 
+# Date input for vertical line
+vertical_line_date = st.date_input("Select Date for Vertical Line")
+
 # Button to fetch and display data
 if st.button("Fetch Data"):
     with st.spinner("Fetching data..."):
@@ -61,10 +64,22 @@ if st.button("Fetch Data"):
                 st.subheader("Price Chart")
                 chart = StreamlitChart(width=900, height=600)
                 chart.set(data)
-                chart.load()
 
+                # Add vertical line
+                vertical_line_str = vertical_line_date.strftime('%Y-%m-%d')
+                if vertical_line_str in data['time'].values:
+                    chart.add_marker({
+                        "time": vertical_line_str,
+                        "position": "aboveBar",
+                        "color": "#ff0000",
+                        "shape": "arrowDown",
+                        "text": "Selected Date"
+                    })
+                else:
+                    st.warning("Selected date not found in fetched data.")
+
+                chart.load()
             else:
                 st.error(f"No data found for {symbol} on {exchange}")
-
         except Exception as e:
             st.error(f"Error fetching data: {str(e)}")
