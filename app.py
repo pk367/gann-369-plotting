@@ -1,14 +1,19 @@
-from tvDatafeed import TvDatafeed, Interval
+import streamlit as st
 import pandas as pd
+from tvDatafeed import TvDatafeed, Interval
+from lightweight_charts.widgets import StreamlitChart
+from datetime import timedelta
 import numpy as np
 import logging
-import plotly.graph_objects as go
-import streamlit as st
-from datetime import timedelta
+from IPython.display import display, HTML
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Set up page configuration
+st.set_page_config(layout="wide", page_title="Swing Projection Chart")
+st.title("Swing High/Low Projection Chart")
 
 def fetch_data(tv_datafeed, symbol, exchange, interval, n_bars, fut_contract=None):
     """Fetches historical data for the given symbol and interval."""
@@ -76,221 +81,172 @@ def calculate_projected_dates(dates, prices, type_label):
     
     return df
 
-def plot_candlestick_with_projections(data, high_projections_df, low_projections_df):
-    """Create a candlestick chart with projected dates marked as vertical lines."""
-    # Create the candlestick chart
-    fig = go.Figure()
+def generate_vertical_lines(projection_df, type_label, color):
+    """Generate vertical line markers for lightweight charts."""
+    vertical_lines = []
     
-    # Add candlestick trace
-    fig.add_trace(go.Candlestick(
-        x=data.index,
-        open=data['open'],
-        high=data['high'],
-        low=data['low'],
-        close=data['close'],
-        name='Candlestick'
-    ))
+    # Define the projection periods
+    periods = [30, 60, 90, 120, 180, 270, 360]
     
-    # Define colors for different projection periods
-    period_colors = {
-        30: 'rgba(255, 0, 0, 0.5)',    # Red
-        60: 'rgba(255, 165, 0, 0.5)',  # Orange
-        90: 'rgba(255, 255, 0, 0.5)',  # Yellow
-        120: 'rgba(0, 255, 0, 0.5)',   # Green
-        180: 'rgba(0, 0, 255, 0.5)',   # Blue
-        270: 'rgba(75, 0, 130, 0.5)',  # Indigo
-        360: 'rgba(148, 0, 211, 0.5)'  # Violet
+    # Generate a different color shade for each period
+    colors = {
+        30: f"{color}88",   # 30 days - lighter
+        60: f"{color}99",
+        90: f"{color}AA",
+        120: f"{color}BB",
+        180: f"{color}CC",
+        270: f"{color}DD",
+        360: f"{color}EE"    # 360 days - darker
     }
     
-    # Add vertical lines for swing high projections
-    if not high_projections_df.empty:
-        for period in [30, 60, 90, 120, 180, 270, 360]:
-            # Ensure the column exists
-            column_name = f'Swing High +{period}d'
-            if column_name in high_projections_df.columns:
-                for date in high_projections_df[column_name]:
-                    if date <= data.index[-1]:  # Only add lines for dates in the data range
-                        fig.add_shape(
-                            type="line",
-                            x0=date,
-                            y0=data['low'].min(),
-                            x1=date,
-                            y1=data['high'].max(),
-                            line=dict(
-                                color=period_colors[period],
-                                width=1,
-                                dash="dot",
-                            ),
-                            name=f'High +{period}d'
-                        )
+    for _, row in projection_df.iterrows():
+        for period in periods:
+            date_col = f'{type_label} +{period}d'
+            if pd.notna(row[date_col]):
+                # Format the time correctly for lightweight charts
+                time_str = row[date_col].strftime('%Y-%m-%d')
+                
+                vertical_lines.append({
+                    'time': time_str,
+                    'color': colors[period],
+                    'text': f"{type_label} +{period}d",
+                    'position': 'aboveBar' if type_label == 'Swing High' else 'belowBar',
+                    'shape': 'arrow' if type_label == 'Swing High' else 'arrowUp',
+                    'textColor': colors[period]
+                })
     
-    # Add vertical lines for swing low projections
-    if not low_projections_df.empty:
-        for period in [30, 60, 90, 120, 180, 270, 360]:
-            # Ensure the column exists
-            column_name = f'Swing Low +{period}d'
-            if column_name in low_projections_df.columns:
-                for date in low_projections_df[column_name]:
-                    if date <= data.index[-1]:  # Only add lines for dates in the data range
-                        fig.add_shape(
-                            type="line",
-                            x0=date,
-                            y0=data['low'].min(),
-                            x1=date,
-                            y1=data['high'].max(),
-                            line=dict(
-                                color=period_colors[period],
-                                width=1,
-                                dash="dash",
-                            ),
-                            name=f'Low +{period}d'
-                        )
-    
-    # Add markers for swing high points
-    if not high_projections_df.empty:
-        fig.add_trace(go.Scatter(
-            x=high_projections_df['Swing High Date'],
-            y=high_projections_df['Swing High Price'],
-            mode='markers',
-            marker=dict(
-                symbol='triangle-up',
-                size=10,
-                color='red',
-            ),
-            name='Swing Highs'
-        ))
-    
-    # Add markers for swing low points
-    if not low_projections_df.empty:
-        fig.add_trace(go.Scatter(
-            x=low_projections_df['Swing Low Date'],
-            y=low_projections_df['Swing Low Price'],
-            mode='markers',
-            marker=dict(
-                symbol='triangle-down',
-                size=10,
-                color='green',
-            ),
-            name='Swing Lows'
-        ))
-    
-    # Add a legend for the projection date colors
-    for period, color in period_colors.items():
-        fig.add_trace(go.Scatter(
-            x=[None],
-            y=[None],
-            mode='lines',
-            line=dict(color=color, width=2),
-            name=f'+{period} days'
-        ))
-    
-    # Update layout
-    fig.update_layout(
-        title=f'Candlestick Chart with Projected Dates',
-        xaxis_title='Date',
-        yaxis_title='Price',
-        height=800,
-        xaxis_rangeslider_visible=False
-    )
-    
-    return fig
+    return vertical_lines
 
-def create_projected_dates_table(high_projections_df, low_projections_df):
-    """Create tables for the projected dates."""
-    # Display swing high projections
-    if not high_projections_df.empty:
-        st.subheader("Swing High Projections")
-        st.dataframe(high_projections_df)
-    
-    # Display swing low projections
-    if not low_projections_df.empty:
-        st.subheader("Swing Low Projections")
-        st.dataframe(low_projections_df)
-
-def main():
-    st.set_page_config(layout="wide")
-    
-    st.title("Technical Analysis: Swing Points and Projected Dates")
-    
-    # Sidebar for inputs
-    st.sidebar.header("Parameters")
-    
-    symbol = st.sidebar.text_input("Symbol", "sbin")
-    exchange = st.sidebar.text_input("Exchange", "NSE")
-    interval_options = [
-        "1 minute", "5 minutes", "15 minutes", "30 minutes", "1 hour", 
-        "2 hours", "4 hours", "1 day", "1 week", "1 month"
-    ]
-    selected_interval = st.sidebar.selectbox("Interval", interval_options, index=7)  # Default to 1 day
-    
-    # Map selected interval to TvDatafeed Interval
-    interval_mapping = {
-        "1 minute": Interval.in_1_minute,
-        "5 minutes": Interval.in_5_minute,
-        "15 minutes": Interval.in_15_minute,
-        "30 minutes": Interval.in_30_minute,
-        "1 hour": Interval.in_1_hour,
-        "2 hours": Interval.in_2_hour,
-        "4 hours": Interval.in_4_hour,
-        "1 day": Interval.in_daily,
-        "1 week": Interval.in_weekly,
-        "1 month": Interval.in_monthly
+# Input fields for stock symbol and exchange
+col1, col2, col3 = st.columns(3)
+with col1:
+    symbol = st.text_input("Symbol", "sbin")
+with col2:
+    exchange = st.text_input("Exchange", "NSE")
+with col3:
+    interval_options = {
+        "1 Day": Interval.in_daily,
+        "1 Hour": Interval.in_1_hour,
+        "4 Hour": Interval.in_4_hour,
+        "Weekly": Interval.in_weekly
     }
-    interval = interval_mapping[selected_interval]
-    
-    n_bars = st.sidebar.number_input("Number of bars", min_value=100, max_value=10000, value=1000)
-    pvtLenL = st.sidebar.number_input("Left pivot length", min_value=1, max_value=10, value=3)
-    pvtLenR = st.sidebar.number_input("Right pivot length", min_value=1, max_value=10, value=3)
-    
-    # Button to fetch data and update chart
-    if st.sidebar.button("Analyze"):
-        with st.spinner("Fetching data..."):
-            # Initialize TV Datafeed
+    interval = st.selectbox("Interval", list(interval_options.keys()))
+
+# Configuration options
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    n_bars = st.slider("Number of bars", 100, 5000, 1000)
+with col2:
+    pvtLenL = st.slider("Pivot Length Left", 1, 10, 3)
+with col3:
+    pvtLenR = st.slider("Pivot Length Right", 1, 10, 3)
+with col4:
+    show_projections = st.checkbox("Show Projections", True)
+
+# Button to fetch and display data
+if st.button("Generate Chart"):
+    with st.spinner("Fetching data and generating chart..."):
+        try:
+            # Initialize TvDatafeed
             tv = TvDatafeed()
             
             # Fetch data
-            data = fetch_data(tv, symbol, exchange, interval, n_bars)
+            data = fetch_data(tv, symbol, exchange, interval_options[interval], n_bars)
             
             if data is not None and not data.empty:
-                # Find all swing dates and prices
+                # Find swing highs and lows
                 swing_high_dates, swing_high_prices, swing_low_dates, swing_low_prices = find_swing_dates(data, pvtLenL, pvtLenR)
                 
-                # Calculate projected dates for swing highs and lows
+                # Calculate projection dates
                 high_projection_df = calculate_projected_dates(swing_high_dates, swing_high_prices, "Swing High")
                 low_projection_df = calculate_projected_dates(swing_low_dates, swing_low_prices, "Swing Low")
                 
-                # Create and display the chart
-                fig = plot_candlestick_with_projections(data, high_projection_df, low_projection_df)
-                st.plotly_chart(fig, use_container_width=True)
+                # Reset index to make date a column
+                chart_data = data.reset_index()
                 
-                # Display tables with projected dates
-                create_projected_dates_table(high_projection_df, low_projection_df)
+                # Convert datetime to string format that lightweight charts can handle
+                chart_data['datetime'] = chart_data['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
                 
-                # Option to download the data
-                st.subheader("Download Data")
+                # Rename columns to match what lightweight charts expects
+                chart_data = chart_data.rename(columns={
+                    'datetime': 'time',
+                    'open': 'open',
+                    'high': 'high',
+                    'low': 'low',
+                    'close': 'close',
+                    'volume': 'volume'
+                })
+                
+                # Display summary of the data
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    if not high_projection_df.empty:
-                        csv_high = high_projection_df.to_csv(index=False)
-                        st.download_button(
-                            label="Download Swing High Projections",
-                            data=csv_high,
-                            file_name=f"{symbol}_swing_high_projections.csv",
-                            mime="text/csv"
-                        )
-                
+                    st.subheader(f"Found {len(swing_high_dates)} Swing Highs")
+                    st.dataframe(high_projection_df.head())
                 with col2:
-                    if not low_projection_df.empty:
-                        csv_low = low_projection_df.to_csv(index=False)
-                        st.download_button(
-                            label="Download Swing Low Projections",
-                            data=csv_low,
-                            file_name=f"{symbol}_swing_low_projections.csv",
-                            mime="text/csv"
-                        )
+                    st.subheader(f"Found {len(swing_low_dates)} Swing Lows")
+                    st.dataframe(low_projection_df.head())
+                
+                # Generate vertical lines for projections
+                markers = []
+                
+                # Mark original swing points
+                for date, price in zip(swing_high_dates, swing_high_prices):
+                    markers.append({
+                        'time': date.strftime('%Y-%m-%d'),
+                        'position': 'aboveBar',
+                        'color': '#00FF00',
+                        'shape': 'circle',
+                        'text': f'H: {price}'
+                    })
+                
+                for date, price in zip(swing_low_dates, swing_low_prices):
+                    markers.append({
+                        'time': date.strftime('%Y-%m-%d'),
+                        'position': 'belowBar',
+                        'color': '#FF0000',
+                        'shape': 'circle',
+                        'text': f'L: {price}'
+                    })
+                
+                # Add projection markers if enabled
+                if show_projections:
+                    # Add projection lines for swing highs (blue)
+                    high_markers = generate_vertical_lines(high_projection_df, "Swing High", "#0000FF")
+                    markers.extend(high_markers)
+                    
+                    # Add projection lines for swing lows (red)
+                    low_markers = generate_vertical_lines(low_projection_df, "Swing Low", "#FF0000")
+                    markers.extend(low_markers)
+                
+                # Create and display the chart
+                st.subheader(f"Price Chart for {symbol} with Swing Projections")
+                chart = StreamlitChart(width=1200, height=800)
+                
+                # Set the data and markers
+                chart.set(chart_data)
+                chart.marker_set(markers)
+                
+                # Load the chart
+                chart.load()
+                
+                # Export options
+                st.download_button(
+                    label="Download Swing High Projections CSV",
+                    data=high_projection_df.to_csv(index=False),
+                    file_name=f"{symbol}_swing_high_projections.csv",
+                    mime="text/csv"
+                )
+                
+                st.download_button(
+                    label="Download Swing Low Projections CSV",
+                    data=low_projection_df.to_csv(index=False),
+                    file_name=f"{symbol}_swing_low_projections.csv",
+                    mime="text/csv"
+                )
+                
             else:
-                st.error("Failed to fetch data. Please check your inputs and try again.")
-
-if __name__ == "__main__":
-    main()
+                st.error(f"No data found for {symbol} on {exchange}")
+                
+        except Exception as e:
+            st.error(f"Error generating chart: {str(e)}")
+            st.exception(e)
