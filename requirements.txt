@@ -3,3 +3,4 @@ git+https://github.com/pk367/datafeed.git
 streamlit-lightweight-charts 
 pandas
 lightweight-charts
+plotly
