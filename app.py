@@ -83,31 +83,14 @@ def prepare_chart_data(data):
         timestamp = int(idx.timestamp()) * 1000  # Convert to milliseconds
         chart_data.append({
             "time": timestamp,
-            "open": row['open'],
-            "high": row['high'],
-            "low": row['low'],
-            "close": row['close'],
-            "volume": row['volume'] if 'volume' in row else 0
+            "open": float(row['open']),
+            "high": float(row['high']),
+            "low": float(row['low']),
+            "close": float(row['close']),
+            "volume": float(row['volume'] if 'volume' in row else 0)
         })
     
     return chart_data
-
-def create_vertical_line_markers(dates, colors, labels):
-    """Create vertical line markers for the given dates."""
-    markers = []
-    
-    for i, date in enumerate(dates):
-        if pd.notna(date):
-            timestamp = int(date.timestamp()) * 1000
-            markers.append({
-                "time": timestamp,
-                "position": "aboveBar",
-                "color": colors[i % len(colors)],
-                "shape": "arrowDown",
-                "text": labels[i % len(labels)]
-            })
-    
-    return markers
 
 def main():
     st.set_page_config(layout="wide", page_title="Swing High/Low Analyzer")
@@ -166,47 +149,7 @@ def main():
                 with tab1:
                     st.subheader(f"Candlestick Chart for {symbol} with Projected Dates")
                     
-                    # Prepare chart specification
-                    chart_options = {
-                        "height": 600,
-                        "layout": {
-                            "textColor": "black",
-                            "background": {
-                                "type": "solid",
-                                "color": "white"
-                            },
-                        },
-                        "grid": {
-                            "vertLines": {
-                                "visible": False
-                            },
-                            "horzLines": {
-                                "visible": False
-                            }
-                        },
-                        "timeScale": {
-                            "timeVisible": True,
-                            "secondsVisible": False
-                        },
-                        "crosshair": {
-                            "mode": 1
-                        }
-                    }
-                    
-                    # Create candlestick series
-                    series = [{
-                        "type": 'Candlestick',
-                        "data": chart_data,
-                        "options": {
-                            "upColor": "#26a69a",
-                            "downColor": "#ef5350",
-                            "borderVisible": False,
-                            "wickUpColor": "#26a69a",
-                            "wickDownColor": "#ef5350"
-                        }
-                    }]
-                    
-                    # Create markers for projected dates
+                    # Collect all markers for projected dates
                     all_markers = []
                     
                     # Colors for different projection periods
@@ -264,14 +207,59 @@ def main():
                                 "text": "L"
                             })
                     
-                    # Add markers to the main series
-                    series[0]["markers"] = all_markers
+                    # Create chart specifications
+                    chart_options = {
+                        "height": 600,
+                        "layout": {
+                            "textColor": "black",
+                            "background": {
+                                "type": "solid",
+                                "color": "white"
+                            }
+                        },
+                        "grid": {
+                            "vertLines": {
+                                "visible": False
+                            },
+                            "horzLines": {
+                                "visible": False
+                            }
+                        },
+                        "timeScale": {
+                            "timeVisible": True,
+                            "secondsVisible": False
+                        },
+                        "crosshair": {
+                            "mode": 1
+                        }
+                    }
+                    
+                    # Create candlestick series
+                    candlestick_series = {
+                        "type": 'Candlestick',
+                        "data": chart_data,
+                        "options": {
+                            "upColor": "#26a69a",
+                            "downColor": "#ef5350",
+                            "borderVisible": False,
+                            "wickUpColor": "#26a69a",
+                            "wickDownColor": "#ef5350"
+                        },
+                        "markers": all_markers
+                    }
                     
                     # Render the chart
-                    renderLightweightCharts(series=series, options=chart_options)
+                    charts_data = {
+                        "candlestick": {
+                            "chart": chart_options,
+                            "series": [candlestick_series]
+                        }
+                    }
+                    
+                    renderLightweightCharts(charts_data, "candlestick", key="chart")
                     
                     # Add a legend for the markers
-                    legend_col1, legend_col2, legend_col3, legend_col4 = st.columns(4)
+                    legend_col1, legend_col2 = st.columns(2)
                     with legend_col1:
                         st.markdown("**Marker Legend:**")
                         st.markdown("**H** - Swing High")
